@@ -94,7 +94,7 @@
 
     <div class="control-panel">
         <h3>交通事故地理分析</h3>
-        <p>請選擇 analysis 年份：</p>
+        <p>請選擇分析年份：</p>
         <div class="year-selector">
             <button class="year-btn" onclick="changeYear('2021', event)">110 年</button>
             <button class="year-btn" onclick="changeYear('2020', event)">109 年</button>
@@ -110,10 +110,10 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        // 1. 初始化網頁地圖定位（定位在台灣中心）
+        // 1. 初始化網頁地圖定位（💡 微調中心點與縮放，讓本島跟離島視覺比例最飽滿完美！）
         const map = L.map('map', { 
-            preferCanvas: true // 🚀 效能優化：強制地圖優先使用 Canvas 渲染基礎圖層
-        }).setView([23.6978, 120.9605], 8);
+            preferCanvas: true 
+        }).setView([23.6, 120.7], 7.5); // 從原本的 8 稍微拉遠到 7.5，金門馬祖澎湖第一眼看過去超清晰！
 
         // 2. 載入乾淨的淺色地圖底圖
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -124,10 +124,10 @@
 
         // 3. 🚀 大數據專用非同步聚落圖層設定
         let markerLayer = L.markerClusterGroup({
-            chunkedLoading: true,      // 🔥 開啟非同步分批加載
-            chunkInterval: 40,         // 每 40 毫秒處理一批數據（流暢關鍵）
-            chunkDelay: 10,            // 批次之間的休息時間 10 毫秒
-            maxClusterRadius: 80,      // 拉大聚落半徑，大幅減少重複運算
+            chunkedLoading: true,      
+            chunkInterval: 40,         
+            chunkDelay: 10,            
+            maxClusterRadius: 80,      
             spiderfyOnMaxZoom: true,   
             showCoverageOnHover: false 
         }).addTo(map);
@@ -135,17 +135,14 @@
         // 微軟官方對外安全水管 URL
         const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
 
-        // 紀錄當前正在運行的渲染排程，防止使用者瘋狂切換按鈕時發生多線程打架
         let currentTimeoutId = null;
 
         // 4. 動態切換年份與抓取資料的函式
         function changeYear(year, event) {
-            // 如果上一次的年份還在原地「排隊下雨」，立刻強制中止它，切換到新年份
             if (currentTimeoutId) {
                 clearTimeout(currentTimeoutId);
             }
 
-            // 切換按鈕 active 樣式
             const buttons = document.querySelectorAll('.year-btn');
             buttons.forEach(btn => btn.classList.remove('active'));
             if (event) {
@@ -155,14 +152,12 @@
             const statsBox = document.getElementById('stats-box');
             statsBox.innerHTML = `⏳ 正在透過微軟水管讀取 ${parseInt(year)-1911} 年數據...`;
 
-            // 發送請求去優化後的後端 API
             fetch(`${baseUrl}/api/live-accidents/${year}`)
                 .then(res => {
                     if (!res.ok) throw new Error('網路水管回應失敗');
                     return res.json();
                 })
                 .then(data => {
-                    // 🚀 清空上一個年份留下的所有舊點點
                     markerLayer.clearLayers();
 
                     if (!data || data.length === 0) {
@@ -172,33 +167,22 @@
 
                     statsBox.innerHTML = `⚡️ 成功撈取 ${data.length.toLocaleString()} 筆！開始即時同步地圖...`;
 
-                    const batchSize = 20000; // 🎯 核心特技：每累積 2 萬筆就先在螢幕上「噴」出來！
+                    const batchSize = 20000; 
                     let processedCount = 0;
-                    let validRenderedCount = 0; // 紀錄實際畫在台灣土地上的點數
+                    let validRenderedCount = 0; 
 
-                    // 🚀 漸進式分批渲染核心函式
                     function renderBatch(startIndex) {
                         const endIndex = Math.min(startIndex + batchSize, data.length);
                         let batchMarkers = [];
 
-                        // 💡 包容歷史偏移的離島多點地理圍欄（Poly-Geofencing with Offset Support）
+                        // 💡 包容歷史偏移的離島多點地理圍欄
                         const checkPointInTaiwan = (lat, lng) => {
-                            // 1. 台灣本島精準陸地範圍
                             if (lat >= 21.9 && lat <= 25.3 && lng >= 120.1 && lng <= 122.1) return true;
-                            
-                            // 2. 離島特區：放寬範圍框，精準捕捉掉在海面上的離島真實數據！
-                            // 澎湖特區
                             if (lat >= 23.1 && lat <= 23.8 && lng >= 119.2 && lng <= 119.8) return true;
-                            // 金門特區
                             if (lat >= 24.3 && lat <= 24.6 && lng >= 118.1 && lng <= 118.6) return true;
-                            // 馬祖特區
                             if (lat >= 26.0 && lat <= 26.4 && lng >= 119.8 && lng <= 120.2) return true;
-                            // 綠島特區
                             if (lat >= 22.5 && lat <= 22.8 && lng >= 121.3 && lng <= 121.6) return true;
-                            // 蘭嶼特區
                             if (lat >= 21.9 && lat <= 22.2 && lng >= 121.4 && lng <= 121.7) return true;
-
-                            // 不在安全邊界內的真正無效流浪點，當場捨棄
                             return false;
                         };
 
@@ -206,7 +190,6 @@
                             const item = data[i];
                             
                             if (item.lat && item.lng) {
-                                // 🚀 執行包容性過濾機制
                                 if (checkPointInTaiwan(item.lat, item.lng)) {
                                     const marker = L.marker([item.lat, item.lng])
                                                     .bindPopup(item.info || `交通事故點`);
@@ -215,15 +198,12 @@
                             }
                         }
 
-                        // 🔥 累積滿一批，立刻灌進地圖
                         markerLayer.addLayers(batchMarkers);
                         processedCount += (endIndex - startIndex);
                         validRenderedCount += batchMarkers.length;
 
-                        // 更新右上角的統計框，顯示真實處理進度
                         statsBox.innerHTML = `⏳ 正在即時過濾並更新...<br>已分析：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆<br>✨ 已定位：${validRenderedCount.toLocaleString()} 筆`;
 
-                        // 如果還沒畫完，下一毫秒繼續呼叫下一波海浪
                         if (endIndex < data.length) {
                             currentTimeoutId = setTimeout(() => renderBatch(endIndex), 1);
                         } else {
@@ -232,7 +212,6 @@
                         }
                     }
 
-                    // 🚀 啟動第一波海浪！
                     renderBatch(0);
                 })
                 .catch(err => {
@@ -241,7 +220,6 @@
                 });
         }
 
-        // 5. 網頁第一次打開時，自動觸發預設的 107年（2018）
         window.onload = function() {
             changeYear('2018', null);
         };
