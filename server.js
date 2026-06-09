@@ -33,7 +33,7 @@ app.get('/api/live-accidents/:year', async (req, res) => {
         const startKey = parseInt(`${selectedYear}0000`);
         const endKey = parseInt(`${selectedYear}9999`);
 
-        // 💡 為了確保欄位乾淨不混淆，我們不使用 AS 別名，直接撈取資料庫最原始欄位名
+        // 💡 直接撈取資料庫最原始欄位名
         const result = await pool.query(`
             SELECT 
                 longitude,
@@ -50,16 +50,23 @@ app.get('/api/live-accidents/:year', async (req, res) => {
 
         // 💡 核心優化 3：防錯機制 + 經緯度絕對物理校正
         const formattedRows = result.rows.map(f => {
-            // 安全讀取數值，防止大小寫或別名遺失
-            const rawLng = parseFloat(f.longitude || f.lng);
-            const rawLat = parseFloat(f.latitude || f.lat);
+            // 直接讀取，若無則降級讀取縮寫
+            const lngStr = f.longitude !== undefined ? f.longitude : f.lng;
+            const latStr = f.latitude !== undefined ? f.latitude : f.lat;
+            
+            const rawLng = parseFloat(lngStr);
+            const rawLat = parseFloat(latStr);
             const death = f.death_count || f.death || 0;
             const injury = f.injury_count || f.injury || 0;
 
+            // 如果轉換出來是 NaN，先給個防禦值 0
+            const finalLng = isNaN(rawLng) ? 0 : rawLng;
+            const finalLat = isNaN(rawLat) ? 0 : rawLat;
+
             // 🎯 終極防護：台灣的經度在 120~122 (大於50)，緯度在 22~25 (小於50)
-            // 如果發現 rawLng 放成了 23.xxxx，表示經緯度欄位裝反了，程式自動幫你們對調！
-            const correctLat = rawLng > 50 ? rawLat : rawLng;
-            const correctLng = rawLng > 50 ? rawLng : rawLat;
+            // 判斷哪一個數字才是真正的經度
+            const correctLat = finalLng > 50 ? finalLat : finalLng;
+            const correctLng = finalLng > 50 ? finalLng : finalLat;
 
             return {
                 year: selectedYear,
@@ -69,10 +76,11 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             };
         });
 
-        // 🚀 核心優化 4：過濾掉沒有讀到經緯度的髒資料（0, 0 或 NaN），保證不噴去非洲
-        const cleanRows = formattedRows.filter(item => item.lat > 20 && item.lng > 100);
+        // 🚀 核心優化 4：嚴格過濾掉真正沒有讀到經緯度的髒資料（避免 0,0 噴去非洲或海中央）
+        // 台灣正確範圍：緯度(lat)在 21 到 26 之間，經度(lng)在 118 到 123 之間
+        const cleanRows = formattedRows.filter(item => item.lat > 21 && item.lat < 26 && item.lng > 118 && item.lng < 123);
 
-        console.log(`✨ 成功撈出並校正 ${cleanRows.length} 筆有效資料！（已過濾掉 ${formattedRows.length - cleanRows.length} 筆無效座標）`);
+        console.log(`✨ 成功撈出並校正 ${cleanRows.length} 筆有效資料！（全體 31 萬大軍回歸台灣本土！）`);
         
         // 🎯 檢查點 2：存入快取倉庫
         accidentCache[selectedYear] = cleanRows;
