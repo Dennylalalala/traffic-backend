@@ -84,6 +84,7 @@
             border-radius: 4px;
             min-height: 20px;
             word-break: break-all;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -121,22 +122,29 @@
             maxZoom: 20
         }).addTo(map);
 
-        // 3. 🚀 核心效能魔改：配置大數據專用非同步聚落圖層
-        // 讓 100 多萬筆資料用「背景下雨」分批載入，絕對不鎖死瀏覽器網頁！
+        // 3. 🚀 大數據專用非同步聚落圖層設定
         let markerLayer = L.markerClusterGroup({
             chunkedLoading: true,      // 🔥 開啟非同步分批加載
-            chunkInterval: 40,         // 每 40 毫秒處理一批數據（預設 200，調低讓網頁反應更快）
-            chunkDelay: 10,            // 批次之間的休息時間 10 毫秒，維持 UI 流暢度
-            maxClusterRadius: 80,      // 稍微拉大聚落半徑（預設 65），減少重複渲染與運算，大幅加速
-            spiderfyOnMaxZoom: true,   // 放大到極限時展開重疊點
-            showCoverageOnHover: false // 關閉滑鼠懸停藍色外框，省去沒必要的 CPU 繪圖效能
+            chunkInterval: 40,         // 每 40 毫秒處理一批數據（流暢關鍵）
+            chunkDelay: 10,            // 批次之間的休息時間 10 毫秒
+            maxClusterRadius: 80,      // 拉大聚落半徑，大幅減少重複運算
+            spiderfyOnMaxZoom: true,   
+            showCoverageOnHover: false 
         }).addTo(map);
 
-        // 微軟官方對外安全水管 URL (末尾不要加斜線)
+        // 微軟官方對外安全水管 URL (務必確認 VS Code PORTS 還在跑這串)
         const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
+
+        // 紀錄當前正在運行的渲染排程，防止使用者瘋狂切換按鈕時發生多線程打架
+        let currentTimeoutId = null;
 
         // 4. 動態切換年份與抓取資料的函式
         function changeYear(year, event) {
+            // 如果上一次的年份還在原地「排隊下雨」，立刻強制中止它，切換到新年份
+            if (currentTimeoutId) {
+                clearTimeout(currentTimeoutId);
+            }
+
             // 切換按鈕 active 樣式
             const buttons = document.querySelectorAll('.year-btn');
             buttons.forEach(btn => btn.classList.remove('active'));
@@ -145,16 +153,16 @@
             }
 
             const statsBox = document.getElementById('stats-box');
-            statsBox.innerHTML = `⏳ 正在透過安全水管讀取 ${parseInt(year)-1911} 年數據...`;
+            statsBox.innerHTML = `⏳ 正在透過微軟水管讀取 ${parseInt(year)-1911} 年數據...`;
 
-            // 發送請求去後端優化版 API
+            // 發送請求去優化後的後端 API
             fetch(`${baseUrl}/api/live-accidents/${year}`)
                 .then(res => {
                     if (!res.ok) throw new Error('網路水管回應失敗');
                     return res.json();
                 })
                 .then(data => {
-                    // 🚀 優化：先清空上一次年份留在地圖上的舊點點
+                    // 🚀 清空上一個年份留下的所有舊點點
                     markerLayer.clearLayers();
 
                     if (!data || data.length === 0) {
@@ -162,26 +170,44 @@
                         return;
                     }
 
-                    statsBox.innerHTML = `⚡️ 數據傳輸成功！正在佈署 ${data.length.toLocaleString()} 筆事故聚落...`;
+                    statsBox.innerHTML = `⚡️ 成功撈取 ${data.length.toLocaleString()} 筆！開始即時同步地圖...`;
 
-                    // 🚀 核心優化：建立一個臨時的虛擬快取陣列（Bulk Injection）
-                    // 避免在迴圈裡每次都叫地圖重畫（那是地獄卡頓的主因）
-                    let tempMarkers = [];
+                    const batchSize = 20000; // 🎯 核心特技：每累積 2 萬筆就先在螢幕上「噴」出來！
+                    let processedCount = 0;
 
-                    for (let i = 0; i < data.length; i++) {
-                        const item = data[i];
-                        if (item.lat && item.lng) {
-                            // 🚀 效能優化：把詳細文字綁定改成 Lazy Popup（點擊時才即時串文字），省去預先渲染的大量記憶體
-                            const marker = L.marker([item.lat, item.lng])
-                                            .bindPopup(item.info || `交通事故點`);
-                            tempMarkers.push(marker);
+                    // 🚀 漸進式分批渲染核心函式
+                    function renderBatch(startIndex) {
+                        const endIndex = Math.min(startIndex + batchSize, data.length);
+                        let batchMarkers = [];
+
+                        for (let i = startIndex; i < endIndex; i++) {
+                            const item = data[i];
+                            if (item.lat && item.lng) {
+                                // 🚀 Lazy Popup 優化：點擊時才即時串文字，省去預先渲染的大量時間與記憶體
+                                const marker = L.marker([item.lat, item.lng])
+                                                .bindPopup(item.info || `交通事故點`);
+                                batchMarkers.push(marker);
+                            }
+                        }
+
+                        // 🔥 累積滿 2 萬筆，立刻灌進地圖，使用者當場就會看到紅點分批浮現！
+                        markerLayer.addLayers(batchMarkers);
+                        processedCount += batchMarkers.length;
+
+                        // 更新右上角的統計框，讓數字像跑馬燈一樣瘋狂飆升，視覺科技感直接拉滿！
+                        statsBox.innerHTML = `⏳ 正在即時更新...<br>已顯示：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆事故點`;
+
+                        // 如果還沒畫完，下一毫秒繼續呼叫下一波海浪
+                        if (endIndex < data.length) {
+                            currentTimeoutId = setTimeout(() => renderBatch(endIndex), 1);
+                        } else {
+                            statsBox.innerHTML = `✨ 成功載入 ${parseInt(year)-1911} 年共 ${data.length.toLocaleString()} 筆巨量交通事故聚落！`;
+                            currentTimeoutId = null;
                         }
                     }
 
-                    // 🚀 終極一拳：一次性大量灌入地圖圖層，配合內建的 chunkedLoading 機制
-                    markerLayer.addLayers(tempMarkers);
-
-                    statsBox.innerHTML = `✨ 成功載入 ${parseInt(year)-1911} 年共 ${data.length.toLocaleString()} 筆巨量交通事故聚落！`;
+                    // 🚀 啟動第一波海浪！
+                    renderBatch(0);
                 })
                 .catch(err => {
                     console.error('讀取失敗:', err);
