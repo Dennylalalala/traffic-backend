@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>台灣交通事故地理資訊分析地圖 (Live - Optimized)</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+    
+    <style>
+        body { margin: 0; padding: 0; font-family: "Microsoft JhengHei", Arial, sans-serif; }
+        #map { width: 100vw; height: 100vh; }
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 280px;
+        }
+        .control-panel h3 { margin-top: 0; color: #333; border-bottom: 2px solid #ff4d4d; padding-bottom: 8px; }
+        .year-selector { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 8px; 
+            margin-top: 15px; 
+        }
+        .year-btn {
+            background: #f0f0f0; border: 1px solid #ccc; padding: 8px; 
+            border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s;
+            text-align: center;
+        }
+        .year-btn.active { background: #ff4d4d; color: white; border-color: #ff4d4d; }
+        .stats { margin-top: 15px; font-size: 14px; color: #555; background: #fff; padding: 8px; border-radius: 4px; border-left: 4px solid #ff4d4d; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="control-panel">
+        <h3>交通事故地理分析</h3>
+        <p>請選擇分析年份：</p>
+        <div class="year-selector">
+            <button class="year-btn" onclick="changeYear('2021', event)">110 年</button>
+            <button class="year-btn" onclick="changeYear('2020', event)">109 年</button>
+            <button class="year-btn" onclick="changeYear('2019', event)">108 年</button>
+            <button class="year-btn active" onclick="changeYear('2018', event)">107 年</button>
+        </div>
+        <div class="stats" id="stats-box">
+            正在連線至 Node.js 後端 API 讀取即時資料庫數據...
+        </div>
+    </div>
+
+    <script>
+        // 1. 初始化地圖，開啟 Canvas 畫布加速
+        const map = L.map('map', { preferCanvas: true }).setView([23.6978, 120.9605], 8);
+
+        // 2. 載入淺色地圖底圖
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // 💡 關鍵優化 1：將原本的 layerGroup 改為大數據專用的聚落圖層 (markerClusterGroup)
+        let markerLayer = L.markerClusterGroup({
+            chunkedLoading: true,      // 🔥 神級功能：開啟非同步分批加載，網頁絕不卡死凍結
+            maxClusterRadius: 70,      // 聚落融合半徑，數字越大融合越多點
+            spiderfyOnMaxZoom: true,   // 點擊最深層的聚落時，紅點會像蜘蛛網一樣彈開方便點擊
+            showCoverageOnHover: false // 滑鼠移過去不顯示沒必要的邊界框，提升效能
+        }).addTo(map);
+
+        // 💡 3. 核心函數：每一次切換年份，都即時去後端拔「該年份的全部真實資料」
+        function loadYearData(year) {
+            // 顯示載入中狀態提示
+            const rocYearLabel = parseInt(year) - 1911;
+            document.getElementById('stats-box').innerHTML = `正在即時從資料庫撈取 民國 ${rocYearLabel} 年的完整數據...<br>大數據加載中，請稍候...`;
+            
+            // 清空舊年份的聚落圖層
+            markerLayer.clearLayers();
+
+            // 網址後面完美帶上動態年份！精準符合你後端 server.js 第 19 行的規定
+            fetch(`http://localhost:3000/api/live-accidents/${year}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("無法連線至後端伺服器，請確認終端機的 node server.js 是否還開著！");
+                    }
+                    return response.json(); 
+                })
+                .then(jsonData => {
+                    console.log(`成功同步資料庫 ${year} 年全量數據，共 ${jsonData.length} 筆！`);
+                    
+                    // 用一個暫存陣列把所有點包起來，最後一次灌進圖層，這是大數據渲染最快的作法
+                    let tempMarkers = [];
+                    
+                    // 開始高速解析該年份的全部點
+                    jsonData.forEach(accident => {
+                        if (accident.lat && accident.lng && !isNaN(accident.lat) && !isNaN(accident.lng)) {
+                            // 建立圖標標記
+                            const circle = L.circleMarker([accident.lat, accident.lng], {
+                                radius: 3.5,           
+                                fillColor: "#ff4d4d",  
+                                color: "#fff",         
+                                weight: 0.3,           
+                                opacity: 0.8,
+                                fillOpacity: 0.4
+                            });
+
+                            // 綁定點擊彈出視窗
+                            circle.bindPopup(`<b>[民國 ${rocYearLabel} 年事故]</b><br>${accident.info}`);
+                            
+                            // 塞入暫存陣列
+                            tempMarkers.push(circle);
+                        }
+                    });
+
+                    // 💡 關鍵優化 2：一次性把整批陣列倒進聚落外掛，效率比一個一個加快了 100 倍！
+                    markerLayer.addLayers(tempMarkers);
+
+                    // 更新統計面板狀態與總筆數
+                    document.getElementById('stats-box').innerHTML = `
+                        <b>民國 ${rocYearLabel} 年度成果：</b><br>
+                        💥 總計標示車禍點：<span style="color:#ff4d4d; font-weight:bold;">${jsonData.length.toLocaleString()}</span> 處<br>
+                        🟢 狀態：大數據聚落優化同步成功！
+                    `;
+                })
+                .catch(error => {
+                    document.getElementById('stats-box').innerHTML = `<span style="color:red;">❌ 錯誤：${error.message}</span>`;
+                });
+        }
+
+        // 💡 4. 切換年份按鈕的連動動作
+        function changeYear(year, event) {
+            document.querySelectorAll('.year-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 點擊時，直接發送 fetch 去撈該年份的全量資料
+            loadYearData(year);
+        }
+
+        // 💡 5. 網頁一打開，預設直接動態載入 107 年（2018）的完整大數據
+        loadYearData('2018');
+    </script>
+</body>
+</html>

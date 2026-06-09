@@ -1,0 +1,8 @@
+# 排除前端不需要的實體大數據壓縮檔與資料夾
+*.zip
+*.csv
+/Map/accidents.zip
+
+# 排除後端 Node.js 套件垃圾桶
+node_modules/
+.DS_Store
