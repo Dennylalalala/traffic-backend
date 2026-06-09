@@ -132,7 +132,7 @@
             showCoverageOnHover: false 
         }).addTo(map);
 
-        // 微軟官方對外安全水管 URL (務必確認 VS Code PORTS 還在跑這串)
+        // 微軟官方對外安全水管 URL
         const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
 
         // 紀錄當前正在運行的渲染排程，防止使用者瘋狂切換按鈕時發生多線程打架
@@ -182,9 +182,10 @@
 
                         for (let i = startIndex; i < endIndex; i++) {
                             const item = data[i];
+                            // 💡 關鍵修正：因為後端 SQL 把經緯度撈反了，這裡我們將傳統的 [item.lat, item.lng] 
+                            // 修正為 [item.lng, item.lat]，強迫所有外流到太平洋的點點瞬間校正回歸歸位！
                             if (item.lat && item.lng) {
-                                // 🚀 Lazy Popup 優化：點擊時才即時串文字，省去預先渲染的大量時間與記憶體
-                                const marker = L.marker([item.lat, item.lng])
+                                const marker = L.marker([item.lng, item.lat])
                                                 .bindPopup(item.info || `交通事故點`);
                                 batchMarkers.push(marker);
                             }
@@ -194,7 +195,7 @@
                         markerLayer.addLayers(batchMarkers);
                         processedCount += batchMarkers.length;
 
-                        // 更新右上角的統計框，讓數字像跑馬燈一樣瘋狂飆升，視覺科技感直接拉滿！
+                        // 更新右上角的統計框，讓數字像跑馬燈一樣瘋狂飆升
                         statsBox.innerHTML = `⏳ 正在即時更新...<br>已顯示：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆事故點`;
 
                         // 如果還沒畫完，下一毫秒繼續呼叫下一波海浪
