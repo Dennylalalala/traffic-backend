@@ -81,15 +81,15 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             };
         });
 
-        // 🚀 核心優化 4：後端絕對防護陸地護城河（與前端 Map.html 範圍完美對齊）
-        // 緯度(lat) 嚴格限制在 21.8 到 25.3 之間
-        // 經度(lng) 嚴格限制在 120.0 到 122.2 之間
+        // 🚀 核心優化 4：【終極本島收縮防禦】
+        // 配合前端最新微調，緯度限制在 21.9 ~ 25.3，經度限制在 120.1 ~ 122.1
+        // 把台灣本島邊緣、公海、澎湖外海的所有殘留髒點在後端大門直接人道毀滅！
         const cleanRows = formattedRows.filter(item => {
-            return item.lat >= 21.8 && item.lat <= 25.3 && 
-                   item.lng >= 120.0 && item.lng <= 122.2;
+            return item.lat >= 21.9 && item.lat <= 25.3 && 
+                   item.lng >= 120.1 && item.lng <= 122.1;
         });
 
-        console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美回歸台灣陸地！（已成功蒸發所有無效座標與北極髒數據！）`);
+        console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美回歸台灣本島陸地！`);
         
         // 🎯 檢查點 2：存入快取倉庫
         accidentCache[selectedYear] = cleanRows;

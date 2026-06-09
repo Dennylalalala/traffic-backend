@@ -93,7 +93,7 @@
     <div id="map"></div>
 
     <div class="control-panel">
-        <h3>交通事故地理 analysis</h3>
+        <h3>交通事故地理分析</h3>
         <p>請選擇分析年份：</p>
         <div class="year-selector">
             <button class="year-btn" onclick="changeYear('2021', event)">110 年</button>
@@ -132,7 +132,7 @@
             showCoverageOnHover: false 
         }).addTo(map);
 
-        // 微軟官方對外安全水管 URL (請確保跟 VS Code PORTS 裡面的一模一樣)
+        // 微軟官方對外安全水管 URL
         const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
 
         // 紀錄當前正在運行的渲染排程，防止使用者瘋狂切換按鈕時發生多線程打架
@@ -185,10 +185,11 @@
                             const item = data[i];
                             
                             if (item.lat && item.lng) {
-                                // 🎯 前端絕對地理攔截網（Geofencing）
-                                // 台灣本島嚴格座標範圍：緯度 21.8 ~ 25.3，經度 120.0 ~ 122.2
-                                // 只要不在這個格框裡（例如北極圈的 90 度大整數、公海髒資料），當場丟掉、拒絕加入地圖！
-                                if (item.lat >= 21.8 && item.lat <= 25.3 && item.lng >= 120.0 && item.lng <= 122.2) {
+                                // 🎯 前端絕對地理攔截網（完美本島陸地收縮版）
+                                // 台灣本島嚴格陸地座標範圍：
+                                // 緯度(lat) 嚴格限制在 21.9 到 25.3 之間
+                                // 經度(lng) 嚴格限制在 120.1 到 122.1 之間
+                                if (item.lat >= 21.9 && item.lat <= 25.3 && item.lng >= 120.1 && item.lng <= 122.1) {
                                     const marker = L.marker([item.lat, item.lng])
                                                     .bindPopup(item.info || `交通事故點`);
                                     batchMarkers.push(marker);
