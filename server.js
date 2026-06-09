@@ -21,11 +21,11 @@ const accidentCache = {};
 app.get('/api/live-accidents/:year', async (req, res) => {
     const selectedYear = req.params.year; 
     
-    // 🎯 檢查點 1：快取命中直接吐資料
-    if (accidentCache[selectedYear]) {
-        console.log(`⚡️ [快取命中] 記憶體直接吐出西元 ${selectedYear} 年的數據，水管秒通！`);
-        return res.json(accidentCache[selectedYear]);
-    }
+    // // 🎯 檢查點 1：快取命中直接吐資料
+    // if (accidentCache[selectedYear]) {
+    //     console.log(`⚡️ [快取命中] 記憶體直接吐出西元 ${selectedYear} 年的數據，水管秒通！`);
+    //     return res.json(accidentCache[selectedYear]);
+    // }
     
     try {
         console.log(`🔍 [快取未命中] 正在即時去資料庫撈取西元 ${selectedYear} 年的數據...`);
@@ -50,7 +50,7 @@ app.get('/api/live-accidents/:year', async (req, res) => {
 
         // 💡 核心優化 3：防錯機制 + 經緯度絕對物理校正
         const formattedRows = result.rows.map(f => {
-            // 直接讀取，若無則降級讀取縮寫
+            // 直接讀取原始欄位
             const lngStr = f.longitude !== undefined ? f.longitude : f.lng;
             const latStr = f.latitude !== undefined ? f.latitude : f.lat;
             
@@ -64,9 +64,19 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             const finalLat = isNaN(rawLat) ? 0 : rawLat;
 
             // 🎯 終極防護：台灣的經度在 120~122 (大於50)，緯度在 22~25 (小於50)
-            // 判斷哪一個數字才是真正的經度
-            const correctLat = finalLng > 50 ? finalLat : finalLng;
-            const correctLng = finalLng > 50 ? finalLng : finalLat;
+            // 加上常規範圍限制，如果數字飆到幾十萬（沒點小數點的髒整數），直接判定為 0
+            let correctLat = 0;
+            let correctLng = 0;
+
+            if (finalLng > 100 && finalLng < 130 && finalLat > 20 && finalLat < 30) {
+                // 情況一：欄位完全正確
+                correctLat = finalLat;
+                correctLng = finalLng;
+            } else if (finalLat > 100 && finalLat < 130 && finalLng > 20 && finalLng < 30) {
+                // 情況二：經緯度不幸裝反了，自動對調
+                correctLat = finalLng;
+                correctLng = finalLat;
+            }
 
             return {
                 year: selectedYear,
@@ -76,11 +86,14 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             };
         });
 
-        // 🚀 核心優化 4：嚴格過濾掉真正沒有讀到經緯度的髒資料（避免 0,0 噴去非洲或海中央）
-        // 台灣正確範圍：緯度(lat)在 21 到 26 之間，經度(lng)在 118 到 123 之間
-        const cleanRows = formattedRows.filter(item => item.lat > 21 && item.lat < 26 && item.lng > 118 && item.lng < 123);
+        // 🚀 核心優化 4：終極台灣陸地護城河（Geofencing）
+        // 嚴格將經緯度限制在台灣本島範圍內，超出此範圍、或是那些沒有點小數點的北極圈大魔王，當場全部抹除！
+        const cleanRows = formattedRows.filter(item => {
+            return item.lat >= 21.5 && item.lat <= 25.5 && 
+                   item.lng >= 119.5 && item.lng <= 122.5;
+        });
 
-        console.log(`✨ 成功撈出並校正 ${cleanRows.length} 筆有效資料！（全體 31 萬大軍回歸台灣本土！）`);
+        console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美回歸台灣陸地！（已成功蒸發所有無效座標與北極髒數據！）`);
         
         // 🎯 檢查點 2：存入快取倉庫
         accidentCache[selectedYear] = cleanRows;
