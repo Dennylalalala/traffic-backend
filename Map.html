@@ -93,7 +93,7 @@
     <div id="map"></div>
 
     <div class="control-panel">
-        <h3>交通事故地理分析</h3>
+        <h3>交通事故地理 analysis</h3>
         <p>請選擇分析年份：</p>
         <div class="year-selector">
             <button class="year-btn" onclick="changeYear('2021', event)">110 年</button>
@@ -174,6 +174,7 @@
 
                     const batchSize = 20000; // 🎯 核心特技：每累積 2 萬筆就先在螢幕上「噴」出來！
                     let processedCount = 0;
+                    let validRenderedCount = 0; // 紀錄實際畫在台灣土地上的點數
 
                     // 🚀 漸進式分批渲染核心函式
                     function renderBatch(startIndex) {
@@ -183,27 +184,31 @@
                         for (let i = startIndex; i < endIndex; i++) {
                             const item = data[i];
                             
-                            // 💡 終極校正回歸：因為後端已經用數值大小做過絕對防護 (lat 必為 23.xx, lng 必為 120.xx)
-                            // 這裡前端恢復成 Leaflet 的官方標準標準順序：[item.lat, item.lng] 即可！
                             if (item.lat && item.lng) {
-                                const marker = L.marker([item.lat, item.lng])
-                                                .bindPopup(item.info || `交通事故點`);
-                                batchMarkers.push(marker);
+                                // 🎯 前端絕對地理攔截網（Geofencing）
+                                // 台灣本島嚴格座標範圍：緯度 21.8 ~ 25.3，經度 120.0 ~ 122.2
+                                // 只要不在這個格框裡（例如北極圈的 90 度大整數、公海髒資料），當場丟掉、拒絕加入地圖！
+                                if (item.lat >= 21.8 && item.lat <= 25.3 && item.lng >= 120.0 && item.lng <= 122.2) {
+                                    const marker = L.marker([item.lat, item.lng])
+                                                    .bindPopup(item.info || `交通事故點`);
+                                    batchMarkers.push(marker);
+                                }
                             }
                         }
 
-                        // 🔥 累積滿 2 萬筆，立刻灌進地圖，使用者當場就會看到紅點分批浮現！
+                        // 🔥 累積滿一批，立刻灌進地圖
                         markerLayer.addLayers(batchMarkers);
-                        processedCount += batchMarkers.length;
+                        processedCount += (endIndex - startIndex);
+                        validRenderedCount += batchMarkers.length;
 
-                        // 更新右上角的統計框，讓數字像跑馬燈一樣瘋狂飆升
-                        statsBox.innerHTML = `⏳ 正在即時更新...<br>已顯示：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆事故點`;
+                        // 更新右上角的統計框，顯示真實處理進度
+                        statsBox.innerHTML = `⏳ 正在即時過濾並更新...<br>已分析：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆<br>✨ 已定位：${validRenderedCount.toLocaleString()} 筆`;
 
                         // 如果還沒畫完，下一毫秒繼續呼叫下一波海浪
                         if (endIndex < data.length) {
                             currentTimeoutId = setTimeout(() => renderBatch(endIndex), 1);
                         } else {
-                            statsBox.innerHTML = `✨ 成功載入 ${parseInt(year)-1911} 年共 ${data.length.toLocaleString()} 筆巨量交通事故聚落！`;
+                            statsBox.innerHTML = `✨ 成功載入 ${parseInt(year)-1911} 年共 ${validRenderedCount.toLocaleString()} 筆台灣本島交通事故數據！`;
                             currentTimeoutId = null;
                         }
                     }

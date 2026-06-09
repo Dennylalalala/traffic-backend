@@ -21,11 +21,11 @@ const accidentCache = {};
 app.get('/api/live-accidents/:year', async (req, res) => {
     const selectedYear = req.params.year; 
     
-    // // 🎯 檢查點 1：快取命中直接吐資料
-    // if (accidentCache[selectedYear]) {
-    //     console.log(`⚡️ [快取命中] 記憶體直接吐出西元 ${selectedYear} 年的數據，水管秒通！`);
-    //     return res.json(accidentCache[selectedYear]);
-    // }
+    // 🎯 檢查點 1：【重新啟用快取】第二次點擊相同年份時，0.001 秒直接記憶體秒吐，水管不塞車！
+    if (accidentCache[selectedYear]) {
+        console.log(`⚡️ [快取命中] 記憶體直接吐出西元 ${selectedYear} 年的數據，水管秒通！`);
+        return res.json(accidentCache[selectedYear]);
+    }
     
     try {
         console.log(`🔍 [快取未命中] 正在即時去資料庫撈取西元 ${selectedYear} 年的數據...`);
@@ -50,7 +50,6 @@ app.get('/api/live-accidents/:year', async (req, res) => {
 
         // 💡 核心優化 3：防錯機制 + 經緯度絕對物理校正
         const formattedRows = result.rows.map(f => {
-            // 直接讀取原始欄位
             const lngStr = f.longitude !== undefined ? f.longitude : f.lng;
             const latStr = f.latitude !== undefined ? f.latitude : f.lat;
             
@@ -59,21 +58,17 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             const death = f.death_count || f.death || 0;
             const injury = f.injury_count || f.injury || 0;
 
-            // 如果轉換出來是 NaN，先給個防禦值 0
             const finalLng = isNaN(rawLng) ? 0 : rawLng;
             const finalLat = isNaN(rawLat) ? 0 : rawLat;
 
-            // 🎯 終極防護：台灣的經度在 120~122 (大於50)，緯度在 22~25 (小於50)
-            // 加上常規範圍限制，如果數字飆到幾十萬（沒點小數點的髒整數），直接判定為 0
             let correctLat = 0;
             let correctLng = 0;
 
+            // 🎯 第一關防禦：先將正常小數點範圍的經緯度正確歸位
             if (finalLng > 100 && finalLng < 130 && finalLat > 20 && finalLat < 30) {
-                // 情況一：欄位完全正確
                 correctLat = finalLat;
                 correctLng = finalLng;
             } else if (finalLat > 100 && finalLat < 130 && finalLng > 20 && finalLng < 30) {
-                // 情況二：經緯度不幸裝反了，自動對調
                 correctLat = finalLng;
                 correctLng = finalLat;
             }
@@ -86,11 +81,12 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             };
         });
 
-        // 🚀 核心優化 4：終極台灣陸地護城河（Geofencing）
-        // 嚴格將經緯度限制在台灣本島範圍內，超出此範圍、或是那些沒有點小數點的北極圈大魔王，當場全部抹除！
+        // 🚀 核心優化 4：後端絕對防護陸地護城河（與前端 Map.html 範圍完美對齊）
+        // 緯度(lat) 嚴格限制在 21.8 到 25.3 之間
+        // 經度(lng) 嚴格限制在 120.0 到 122.2 之間
         const cleanRows = formattedRows.filter(item => {
-            return item.lat >= 21.5 && item.lat <= 25.5 && 
-                   item.lng >= 119.5 && item.lng <= 122.5;
+            return item.lat >= 21.8 && item.lat <= 25.3 && 
+                   item.lng >= 120.0 && item.lng <= 122.2;
         });
 
         console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美回歸台灣陸地！（已成功蒸發所有無效座標與北極髒數據！）`);
