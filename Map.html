@@ -132,7 +132,7 @@
             showCoverageOnHover: false 
         }).addTo(map);
 
-        // 微軟官方對外安全水管 URL
+        // 微軟官方對外安全水管 URL (請確保跟 VS Code PORTS 裡面的一模一樣)
         const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
 
         // 紀錄當前正在運行的渲染排程，防止使用者瘋狂切換按鈕時發生多線程打架
@@ -182,10 +182,11 @@
 
                         for (let i = startIndex; i < endIndex; i++) {
                             const item = data[i];
-                            // 💡 關鍵修正：因為後端 SQL 把經緯度撈反了，這裡我們將傳統的 [item.lat, item.lng] 
-                            // 修正為 [item.lng, item.lat]，強迫所有外流到太平洋的點點瞬間校正回歸歸位！
+                            
+                            // 💡 終極校正回歸：因為後端已經用數值大小做過絕對防護 (lat 必為 23.xx, lng 必為 120.xx)
+                            // 這裡前端恢復成 Leaflet 的官方標準標準順序：[item.lat, item.lng] 即可！
                             if (item.lat && item.lng) {
-                                const marker = L.marker([item.lng, item.lat])
+                                const marker = L.marker([item.lat, item.lng])
                                                 .bindPopup(item.info || `交通事故點`);
                                 batchMarkers.push(marker);
                             }
