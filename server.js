@@ -21,7 +21,7 @@ const accidentCache = {};
 app.get('/api/live-accidents/:year', async (req, res) => {
     const selectedYear = req.params.year; 
     
-    // 🎯 檢查點 1：【重新啟用快取】第二次點擊相同年份時，0.001 秒直接記憶體秒吐，水管不塞車！
+    // 🎯 檢查點 1：【快取機制全面回歸】第二次點擊相同年份時，0.001 秒記憶體秒吐，拒絕重複撈取！
     if (accidentCache[selectedYear]) {
         console.log(`⚡️ [快取命中] 記憶體直接吐出西元 ${selectedYear} 年的數據，水管秒通！`);
         return res.json(accidentCache[selectedYear]);
@@ -81,17 +81,33 @@ app.get('/api/live-accidents/:year', async (req, res) => {
             };
         });
 
-        // 🚀 核心優化 4：【終極本島收縮防禦】
-        // 配合前端最新微調，緯度限制在 21.9 ~ 25.3，經度限制在 120.1 ~ 122.1
-        // 把台灣本島邊緣、公海、澎湖外海的所有殘留髒點在後端大門直接人道毀滅！
+        // 🚀 核心優化 4：【後端多點地理圍欄（Poly-Geofencing）終極防護網】
+        // 嚴格將經緯度限制在台灣本島陸地與各主要離島範圍內，與前端 Map.html 完美同步！
         const cleanRows = formattedRows.filter(item => {
-            return item.lat >= 21.9 && item.lat <= 25.3 && 
-                   item.lng >= 120.1 && item.lng <= 122.1;
+            // 1. 本島精準陸地範圍 (21.9~25.3, 120.1~122.1)
+            if (item.lat >= 21.9 && item.lat <= 25.3 && item.lng >= 120.1 && item.lng <= 122.1) {
+                return true;
+            }
+            
+            // 2. 離島專屬範圍防線（澎湖、金門、馬祖、綠島、蘭嶼）
+            // 澎湖群島
+            if (item.lat >= 23.1 && item.lat <= 23.8 && item.lng >= 119.3 && item.lng <= 119.7) return true;
+            // 金門
+            if (item.lat >= 24.3 && item.lat <= 24.6 && item.lng >= 118.2 && item.lng <= 118.5) return true;
+            // 馬祖
+            if (item.lat >= 26.1 && item.lat <= 26.3 && item.lng >= 119.9 && item.lng <= 120.1) return true;
+            // 綠島
+            if (item.lat >= 22.6 && item.lat <= 22.7 && item.lng >= 121.4 && item.lng <= 121.6) return true;
+            // 蘭嶼
+            if (item.lat >= 22.0 && item.lat <= 22.1 && item.lng >= 121.5 && item.lng <= 121.6) return true;
+
+            // 完全不符合以上安全邊界的無效點或北極圈大魔王，直接在這裡攔截抹除！
+            return false;
         });
 
-        console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美回歸台灣本島陸地！`);
+        console.log(`✨ 終極校正成功！共 ${cleanRows.length} 筆資料完美歸位台灣本島與各離島陸地！`);
         
-        // 🎯 檢查點 2：存入快取倉庫
+        // 🎯 檢查點 2：將過濾後的乾淨資料存入快取倉庫
         accidentCache[selectedYear] = cleanRows;
 
         // 回傳給前端
