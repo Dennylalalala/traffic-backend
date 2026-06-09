@@ -56,7 +56,7 @@
             <button class="year-btn active" onclick="changeYear('2018', event)">107 年</button>
         </div>
         <div class="stats" id="stats-box">
-            正在連線至 Node.js 後端 API 讀取即時資料庫數據...
+            正在連線至遠端 Node.js 後端 API 讀取即時資料庫數據...
         </div>
     </div>
 
@@ -86,11 +86,11 @@
             // 清空舊年份的聚落圖層
             markerLayer.clearLayers();
 
-            // 網址後面完美帶上動態年份！精準符合你後端 server.js 第 19 行的規定
-            fetch(`http://localhost:3000/api/live-accidents/${year}`)
+            // 🛠️ 關鍵改動：將網址改為你的 LocalTunnel 外部公網水管網址！
+            fetch(`https://evil-windows-send.loca.lt/api/live-accidents/${year}`)
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error("無法連線至後端伺服器，請確認終端機的 node server.js 是否還開著！");
+                        throw new Error("無法連線至後端伺服器，請確認終端機的 localtunnel 與 node server.js 是否都在運作中！");
                     }
                     return response.json(); 
                 })
@@ -128,7 +128,7 @@
                     document.getElementById('stats-box').innerHTML = `
                         <b>民國 ${rocYearLabel} 年度成果：</b><br>
                         💥 總計標示車禍點：<span style="color:#ff4d4d; font-weight:bold;">${jsonData.length.toLocaleString()}</span> 處<br>
-                        🟢 狀態：大數據聚落優化同步成功！
+                        🟢 狀態：大數據遠端同步成功！
                     `;
                 })
                 .catch(error => {
