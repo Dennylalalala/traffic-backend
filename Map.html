@@ -87,7 +87,7 @@
             markerLayer.clearLayers();
 
             // 🛠️ 關鍵改動：將網址改為你的 LocalTunnel 外部公網水管網址！
-            fetch(`https://evil-windows-send.loca.lt/api/live-accidents/${year}`)
+            fetch(`https://traffic-tk.loca.lt/api/live-accidents/${year}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error("無法連線至後端伺服器，請確認終端機的 localtunnel 與 node server.js 是否都在運作中！");
