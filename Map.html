@@ -93,13 +93,13 @@
     <div id="map"></div>
 
     <div class="control-panel">
-        <h3>交通事故地理分析</h3>
+        <h3>交通事故地理 analysis</h3>
         <p>請選擇分析年份：</p>
         <div class="year-selector">
-            <button class="year-btn" onclick="changeYear('2021', event)">110 年</button>
+            <button class="year-btn active" onclick="changeYear('2021', event)">110 年</button>
             <button class="year-btn" onclick="changeYear('2020', event)">109 年</button>
             <button class="year-btn" onclick="changeYear('2019', event)">108 年</button>
-            <button class="year-btn active" onclick="changeYear('2018', event)">107 年</button>
+            <button class="year-btn" onclick="changeYear('2018', event)">107 年</button>
         </div>
         <div class="stats" id="stats-box">
             初始化地圖中...
@@ -110,10 +110,10 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        // 1. 初始化網頁地圖定位（💡 微調中心點與縮放，讓本島跟離島視覺比例最飽滿完美！）
+        // 1. 初始化網頁地圖定位
         const map = L.map('map', { 
             preferCanvas: true 
-        }).setView([23.6, 120.7], 7.5); // 從原本的 8 稍微拉遠到 7.5，金門馬祖澎湖第一眼看過去超清晰！
+        }).setView([23.6, 120.7], 7.5); 
 
         // 2. 載入乾淨的淺色地圖底圖
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -122,7 +122,7 @@
             maxZoom: 20
         }).addTo(map);
 
-        // 3. 🚀 大數據專用非同步聚落圖層設定
+        // 3. 大數據專用非同步聚落圖層設定 (maxClusterRadius: 80)
         let markerLayer = L.markerClusterGroup({
             chunkedLoading: true,      
             chunkInterval: 40,         
@@ -132,8 +132,8 @@
             showCoverageOnHover: false 
         }).addTo(map);
 
-        // 微軟官方對外安全水管 URL
-        const baseUrl = 'https://9q22z55c-3000.jpe1.devtunnels.ms';
+        // 🟢 完美接通：你目前 VS Code Ports 轉發的最新微軟安全水管 URL
+        const baseUrl = 'https://k6nffc8b-3000.jpe1.devtunnels.ms';
 
         let currentTimeoutId = null;
 
@@ -152,6 +152,7 @@
             const statsBox = document.getElementById('stats-box');
             statsBox.innerHTML = `⏳ 正在透過微軟水管讀取 ${parseInt(year)-1911} 年數據...`;
 
+            // 🟢 終極校正：精準符合你 server.js 的 /api/live-accidents/:year 路由格式！
             fetch(`${baseUrl}/api/live-accidents/${year}`)
                 .then(res => {
                     if (!res.ok) throw new Error('網路水管回應失敗');
@@ -167,7 +168,7 @@
 
                     statsBox.innerHTML = `⚡️ 成功撈取 ${data.length.toLocaleString()} 筆！開始即時同步地圖...`;
 
-                    const batchSize = 20000; 
+                    const batchSize = 20000; // 每 2 萬筆分批漸進渲染（符合分批下雨技術）
                     let processedCount = 0;
                     let validRenderedCount = 0; 
 
@@ -175,14 +176,14 @@
                         const endIndex = Math.min(startIndex + batchSize, data.length);
                         let batchMarkers = [];
 
-                        // 💡 包容歷史偏移的離島多點地理圍欄
+                        // 離島多點地理圍欄判定
                         const checkPointInTaiwan = (lat, lng) => {
-                            if (lat >= 21.9 && lat <= 25.3 && lng >= 120.1 && lng <= 122.1) return true;
-                            if (lat >= 23.1 && lat <= 23.8 && lng >= 119.2 && lng <= 119.8) return true;
-                            if (lat >= 24.3 && lat <= 24.6 && lng >= 118.1 && lng <= 118.6) return true;
-                            if (lat >= 26.0 && lat <= 26.4 && lng >= 119.8 && lng <= 120.2) return true;
-                            if (lat >= 22.5 && lat <= 22.8 && lng >= 121.3 && lng <= 121.6) return true;
-                            if (lat >= 21.9 && lat <= 22.2 && lng >= 121.4 && lng <= 121.7) return true;
+                            if (lat >= 21.9 && lat <= 25.3 && lng >= 120.1 && lng <= 122.1) return true; // 本島
+                            if (lat >= 23.1 && lat <= 23.8 && lng >= 119.2 && lng <= 119.8) return true; // 澎湖
+                            if (lat >= 24.3 && lat <= 24.6 && lng >= 118.1 && lng <= 118.6) return true; // 金門
+                            if (lat >= 26.0 && lat <= 26.4 && lng >= 119.8 && lng <= 120.2) return true; // 馬祖
+                            if (lat >= 22.5 && lat <= 22.8 && lng >= 121.3 && lng <= 121.6) return true; // 綠島
+                            if (lat >= 21.9 && lat <= 22.2 && lng >= 121.4 && lng <= 121.7) return true; // 蘭嶼
                             return false;
                         };
 
@@ -191,6 +192,7 @@
                             
                             if (item.lat && item.lng) {
                                 if (checkPointInTaiwan(item.lat, item.lng)) {
+                                    // 完美展現數字大泡泡圖層
                                     const marker = L.marker([item.lat, item.lng])
                                                     .bindPopup(item.info || `交通事故點`);
                                     batchMarkers.push(marker);
@@ -202,6 +204,7 @@
                         processedCount += (endIndex - startIndex);
                         validRenderedCount += batchMarkers.length;
 
+                        // 跑馬燈即時跳動效果
                         statsBox.innerHTML = `⏳ 正在即時過濾並更新...<br>已分析：${processedCount.toLocaleString()} / ${data.length.toLocaleString()} 筆<br>✨ 已定位：${validRenderedCount.toLocaleString()} 筆`;
 
                         if (endIndex < data.length) {
@@ -220,8 +223,9 @@
                 });
         }
 
+        // 網頁一打開，預設加載 110 年（西元 2021）
         window.onload = function() {
-            changeYear('2018', null);
+            changeYear('2021', null);
         };
     </script>
 </body>
